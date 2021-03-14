@@ -20,20 +20,33 @@ class BasicOAuthProvider implements IAuthProvider {
             return request;
         }
 
-        const options: RequestInit = {
-            method: 'POST',
-            form: {
-                'grant_type': 'password',
-                'service': authContext.service,
-                'scope': authContext.scope
-            },
-            headers: {
-                Authorization: basicAuthHeader(cachedProvider.username, await getRegistryPassword(cachedProvider)),
-            },
-        };
+        if (authContext.realm.toString().match('/jwt/auth')) {
+            const options: RequestInit = {
+                method: 'GET',
+                headers: {
+                    Authorization: basicAuthHeader(cachedProvider.username, await getRegistryPassword(cachedProvider)),
+                },
+            }
+            authContext.realm.searchParams.set("service", authContext.service);
+            authContext.realm.searchParams.set("scope", authContext.scope);
+            const tokenResponse = await httpRequest<{ token: string }>(authContext.realm.toString(), options);
+            request.headers.set('Authorization', bearerAuthHeader((await tokenResponse.json()).token));
+        } else {
+            const options: RequestInit = {
+                method: 'POST',
+                form: {
+                    'grant_type': 'password',
+                    'service': authContext.service,
+                    'scope': authContext.scope
+                },
+                headers: {
+                    Authorization: basicAuthHeader(cachedProvider.username, await getRegistryPassword(cachedProvider)),
+                },
+            };
+            const tokenResponse = await httpRequest<{ token: string }>(authContext.realm.toString(), options);
+            request.headers.set('Authorization', bearerAuthHeader((await tokenResponse.json()).token));
+        }
 
-        const tokenResponse = await httpRequest<{ token: string }>(authContext.realm.toString(), options);
-        request.headers.set('Authorization', bearerAuthHeader((await tokenResponse.json()).token));
         return request;
     }
 
