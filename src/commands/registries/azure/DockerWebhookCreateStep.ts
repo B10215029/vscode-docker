@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { WebSiteManagementModels } from '@azure/arm-appservice';
-import { ContainerRegistryManagementModels as AcrModels } from '@azure/arm-containerregistry';
+import { WebSiteManagementModels } from '@azure/arm-appservice'; // These are only dev-time imports so don't need to be lazy
+import { ContainerRegistryManagementModels as AcrModels } from '@azure/arm-containerregistry'; // These are only dev-time imports so don't need to be lazy
 import * as vscode from "vscode";
 import { IAppServiceWizardContext } from "vscode-azureappservice"; // These are only dev-time imports so don't need to be lazy
 import { AzureWizardExecuteStep, createAzureClient } from "vscode-azureextensionui";
@@ -18,7 +18,7 @@ import { cryptoUtils } from '../../../utils/cryptoUtils';
 import { nonNullProp } from "../../../utils/nonNull";
 
 export class DockerWebhookCreateStep extends AzureWizardExecuteStep<IAppServiceWizardContext> {
-    public priority: number = 141; // execute after DockerSiteCreate
+    public priority: number = 142; // execute after DockerAssignAcrPullRoleStep
     private _treeItem: RemoteTagTreeItem;
     public constructor(treeItem: RemoteTagTreeItem) {
         super();
@@ -32,8 +32,8 @@ export class DockerWebhookCreateStep extends AzureWizardExecuteStep<IAppServiceW
         const vscAzureAppService = await import('vscode-azureappservice');
         vscAzureAppService.registerAppServiceExtensionVariables(ext);
         const site: WebSiteManagementModels.Site = nonNullProp(context, 'site');
-        let siteClient = new vscAzureAppService.SiteClient(site, context);
-        let appUri: string = (await siteClient.getWebAppPublishCredential()).scmUri;
+        const siteClient = new vscAzureAppService.SiteClient(site, context);
+        const appUri: string = (await siteClient.getWebAppPublishCredential()).scmUri;
         if (this._treeItem.parent instanceof AzureRepositoryTreeItem) {
             const creatingNewWebhook: string = localize('vscode-docker.commands.registries.azure.dockerWebhook.creatingWebhook', 'Creating webhook for web app "{0}"...', context.newSiteName);
             ext.outputChannel.appendLine(creatingNewWebhook);
@@ -83,7 +83,7 @@ export class DockerWebhookCreateStep extends AzureWizardExecuteStep<IAppServiceW
         const registryTreeItem: AzureRegistryTreeItem = (<AzureRepositoryTreeItem>node.parent).parent;
         const armContainerRegistry = await import('@azure/arm-containerregistry');
         const crmClient = createAzureClient(registryTreeItem.parent.root, armContainerRegistry.ContainerRegistryManagementClient);
-        let webhookCreateParameters: AcrModels.WebhookCreateParameters = {
+        const webhookCreateParameters: AcrModels.WebhookCreateParameters = {
             location: registryTreeItem.registryLocation,
             serviceUri: appUri,
             scope: `${node.parent.repoName}:${node.tag}`,

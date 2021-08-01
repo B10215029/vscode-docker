@@ -7,12 +7,12 @@ import * as fse from 'fs-extra';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { AzureUserInput, callWithTelemetryAndErrorHandling, createAzExtOutputChannel, createExperimentationService, IActionContext, registerUIExtensionVariables, UserCancelledError } from 'vscode-azureextensionui';
+import { callWithTelemetryAndErrorHandling, createAzExtOutputChannel, createExperimentationService, IActionContext, registerUIExtensionVariables } from 'vscode-azureextensionui';
 import { ConfigurationParams, DidChangeConfigurationNotification, DocumentSelector, LanguageClient, LanguageClientOptions, Middleware, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 import * as tas from 'vscode-tas-client';
 import { registerCommands } from './commands/registerCommands';
-import { openStartPageAfterExtensionUpdate } from './commands/startPage/openStartPage';
-import { COMPOSE_FILE_GLOB_PATTERN, extensionVersion } from './constants';
+import { lastVersionKey } from './commands/startPage/openStartPage';
+import { extensionVersion } from './constants';
 import { registerDebugProvider } from './debugging/DebugHelper';
 import { DockerContextManager } from './docker/ContextManager';
 import { ContainerFilesProvider } from './docker/files/ContainerFilesProvider';
@@ -22,11 +22,9 @@ import composeVersionKeys from './dockerCompose/dockerComposeKeyInfo';
 import { DockerComposeParser } from './dockerCompose/dockerComposeParser';
 import { DockerfileCompletionItemProvider } from './dockerfileCompletionItemProvider';
 import { ext } from './extensionVariables';
-import { localize } from './localize';
 import { registerTaskProviders } from './tasks/TaskHelper';
 import { ActivityMeasurementService } from './telemetry/ActivityMeasurementService';
 import { registerListeners } from './telemetry/registerListeners';
-import { SurveyManager } from './telemetry/surveys/SurveyManager';
 import { registerTrees } from './tree/registerTrees';
 import { AzureAccountExtensionListener } from './utils/AzureAccountExtensionListener';
 import { cryptoUtils } from './utils/cryptoUtils';
@@ -35,7 +33,7 @@ import { isLinux, isMac, isWindows } from './utils/osUtils';
 export type KeyInfo = { [keyName: string]: string };
 
 export interface ComposeVersionKeys {
-    All: KeyInfo;
+    all: KeyInfo;
     v1: KeyInfo;
     v2: KeyInfo;
 }
@@ -48,13 +46,6 @@ const DOCUMENT_SELECTOR: DocumentSelector = [
 
 function initializeExtensionVariables(ctx: vscode.ExtensionContext): void {
     ext.context = ctx;
-    // When running tests, DEBUGTELEMETRY=1 is used, so nothing is actually sent. Having this be `true` allows us to test `ActivityMeasurementService` and `ExperimentationTelemetry`.
-    ext.telemetryOptIn = vscode.workspace.getConfiguration('telemetry').get('enableTelemetry', false) || ext.runningTests;
-
-    if (!ext.ui) {
-        // This allows for standard interactions with the end user (as opposed to test input)
-        ext.ui = new AzureUserInput(ctx.globalState);
-    }
 
     ext.outputChannel = createAzExtOutputChannel('Docker', ext.prefix);
     ctx.subscriptions.push(ext.outputChannel);
@@ -64,6 +55,8 @@ function initializeExtensionVariables(ctx: vscode.ExtensionContext): void {
 
 export async function activateInternal(ctx: vscode.ExtensionContext, perfStats: { loadStartTime: number, loadEndTime: number | undefined }): Promise<unknown | undefined> {
     perfStats.loadEndTime = Date.now();
+
+    ctx.globalState.setKeysForSync([lastVersionKey]);
 
     initializeExtensionVariables(ctx);
 
@@ -77,7 +70,7 @@ export async function activateInternal(ctx: vscode.ExtensionContext, perfStats: 
         ext.activityMeasurementService = new ActivityMeasurementService(ctx.globalState);
 
         let targetPopulation: tas.TargetPopulation;
-        if (ext.runningTests || process.env.DEBUGTELEMETRY || process.env.VSCODE_DOCKER_TEAM === '1') {
+        if (process.env.DEBUGTELEMETRY || process.env.VSCODE_DOCKER_TEAM === '1') {
             targetPopulation = tas.TargetPopulation.Team;
         } else if (/alpha/ig.test(extensionVersion.value)) {
             targetPopulation = tas.TargetPopulation.Insiders;
@@ -86,9 +79,8 @@ export async function activateInternal(ctx: vscode.ExtensionContext, perfStats: 
         }
         ext.experimentationService = await createExperimentationService(ctx, targetPopulation);
 
-        (new SurveyManager()).activate();
-
-        validateOldPublisher(activateContext);
+        // Temporarily disabled--reenable if we need to do any surveys
+        // (new SurveyManager()).activate();
 
         ctx.subscriptions.push(
             vscode.languages.registerCompletionItemProvider(
@@ -98,25 +90,20 @@ export async function activateInternal(ctx: vscode.ExtensionContext, perfStats: 
             )
         );
 
-        const YAML_MODE_ID: vscode.DocumentFilter = {
-            language: 'yaml',
-            scheme: 'file',
-            pattern: COMPOSE_FILE_GLOB_PATTERN
-        };
         const COMPOSE_MODE_ID: vscode.DocumentFilter = {
             language: 'dockercompose',
             scheme: 'file',
         };
-        let yamlHoverProvider = new DockerComposeHoverProvider(
+        const composeHoverProvider = new DockerComposeHoverProvider(
             new DockerComposeParser(),
-            composeVersionKeys.All
+            composeVersionKeys.all
         );
         ctx.subscriptions.push(
-            vscode.languages.registerHoverProvider([YAML_MODE_ID, COMPOSE_MODE_ID], yamlHoverProvider)
+            vscode.languages.registerHoverProvider(COMPOSE_MODE_ID, composeHoverProvider)
         );
         ctx.subscriptions.push(
             vscode.languages.registerCompletionItemProvider(
-                [YAML_MODE_ID, COMPOSE_MODE_ID],
+                COMPOSE_MODE_ID,
                 new DockerComposeCompletionItemProvider(),
                 "."
             )
@@ -146,8 +133,6 @@ export async function activateInternal(ctx: vscode.ExtensionContext, perfStats: 
         activateLanguageClient(ctx);
 
         registerListeners();
-
-        void openStartPageAfterExtensionUpdate();
     });
 
     // If the magic VSCODE_DOCKER_TEAM environment variable is set to 1, export the mementos for use by the Memento Explorer extension
@@ -194,36 +179,18 @@ async function getDockerInstallationIDHash(): Promise<string> {
                 return result;
             }
         }
-    } catch { }
+    } catch {
+        // Best effort
+    }
 
     return 'unknown';
 }
 
-/**
- * Workaround for https://github.com/microsoft/vscode/issues/76211 (only necessary if people are on old versions of VS Code that don't have the fix)
- */
-function validateOldPublisher(activateContext: IActionContext): void {
-    const extension = vscode.extensions.getExtension('PeterJausovec.vscode-docker');
-    if (extension) {
-        let message: string = localize('vscode-docker.extension.pleaseReload', 'Please reload Visual Studio Code to complete updating the Docker extension.');
-        let reload: vscode.MessageItem = { title: localize('vscode-docker.extension.reloadNow', 'Reload Now') };
-        // Don't wait
-        /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
-        ext.ui.showWarningMessage(message, reload).then(async result => {
-            if (result === reload) {
-                await vscode.commands.executeCommand('workbench.action.reloadWindow');
-            }
-        });
-
-        activateContext.telemetry.properties.cancelStep = 'oldPublisherInstalled';
-        throw new UserCancelledError();
-    }
-}
-
+/* eslint-disable @typescript-eslint/no-namespace, no-inner-declarations */
 namespace Configuration {
     export function computeConfiguration(params: ConfigurationParams): vscode.WorkspaceConfiguration[] {
-        let result: vscode.WorkspaceConfiguration[] = [];
-        for (let item of params.items) {
+        const result: vscode.WorkspaceConfiguration[] = [];
+        for (const item of params.items) {
             let config: vscode.WorkspaceConfiguration;
 
             if (item.scopeUri) {
@@ -261,24 +228,24 @@ namespace Configuration {
         ));
     }
 }
+/* eslint-enable @typescript-eslint/no-namespace, no-inner-declarations */
 
 function activateLanguageClient(ctx: vscode.ExtensionContext): void {
     // Don't wait
-    /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
-    callWithTelemetryAndErrorHandling('docker.languageclient.activate', async (context: IActionContext) => {
+    void callWithTelemetryAndErrorHandling('docker.languageclient.activate', async (context: IActionContext) => {
         context.telemetry.properties.isActivationEvent = 'true';
-        let serverModule = ext.context.asAbsolutePath(
+        const serverModule = ext.context.asAbsolutePath(
             path.join(
-                ext.ignoreBundle ? "node_modules" : "dist",
+                "dist",
                 "dockerfile-language-server-nodejs",
                 "lib",
                 "server.js"
             )
         );
 
-        let debugOptions = { execArgv: ["--nolazy", "--inspect=6009"] };
+        const debugOptions = { execArgv: ["--nolazy", "--inspect=6009"] };
 
-        let serverOptions: ServerOptions = {
+        const serverOptions: ServerOptions = {
             run: {
                 module: serverModule,
                 transport: TransportKind.ipc,
@@ -291,13 +258,13 @@ function activateLanguageClient(ctx: vscode.ExtensionContext): void {
             }
         };
 
-        let middleware: Middleware = {
+        const middleware: Middleware = {
             workspace: {
                 configuration: Configuration.computeConfiguration
             }
         };
 
-        let clientOptions: LanguageClientOptions = {
+        const clientOptions: LanguageClientOptions = {
             documentSelector: DOCUMENT_SELECTOR,
             synchronize: {
                 fileEvents: vscode.workspace.createFileSystemWatcher("**/.clientrc")

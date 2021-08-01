@@ -13,8 +13,10 @@ import { localize } from '../../localize';
 import { getHandlebarsWithHelpers } from '../../utils/getHandlebarsWithHelpers';
 import { ScaffoldedFileType, ScaffoldingWizardContext } from './ScaffoldingWizardContext';
 
+export type OverwritePolicy = 'overwrite' | 'ask' | 'skip';
+
 export class ScaffoldFileStep<TWizardContext extends ScaffoldingWizardContext> extends AzureWizardExecuteStep<TWizardContext> {
-    public constructor(private readonly fileType: ScaffoldedFileType, public readonly priority: number) {
+    public constructor(private readonly fileType: ScaffoldedFileType, private readonly overwritePolicy: OverwritePolicy, public readonly priority: number) {
         super();
     }
 
@@ -37,7 +39,11 @@ export class ScaffoldFileStep<TWizardContext extends ScaffoldingWizardContext> e
 
         const output = template(wizardContext);
 
-        await this.promptForOverwriteIfNeeded(wizardContext, output, outputPath);
+        if (this.overwritePolicy === 'ask') {
+            await this.promptForOverwriteIfNeeded(wizardContext, output, outputPath);
+        } else if (this.overwritePolicy === 'skip' && await fse.pathExists(outputPath)) {
+            return;
+        }
 
         await fse.writeFile(outputPath, output, { encoding: 'utf-8' });
     }
@@ -144,7 +150,7 @@ export class ScaffoldFileStep<TWizardContext extends ScaffoldingWizardContext> e
             title: localize('vscode-docker.scaffold.scaffoldFileStep.overwriteAll', 'Overwrite All')
         };
 
-        const response = await ext.ui.showWarningMessage(prompt, overwriteAll, overwrite, DialogResponses.cancel);
+        const response = await wizardContext.ui.showWarningMessage(prompt, overwriteAll, overwrite, DialogResponses.cancel);
 
         // Throw if the response is Cancel (Escape / X will throw above)
         if (response === DialogResponses.cancel) {

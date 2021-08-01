@@ -12,7 +12,7 @@ import { scaffoldDebugConfig } from "../scaffolding/scaffoldDebugConfig";
 import { composeDown, composeRestart, composeUp, composeUpSubset } from "./compose/compose";
 import { attachShellContainer } from "./containers/attachShellContainer";
 import { browseContainer } from "./containers/browseContainer";
-import { composeGroupDown, composeGroupLogs, composeGroupRestart } from "./containers/composeGroup";
+import { composeGroupDown, composeGroupLogs, composeGroupRestart, composeGroupStart, composeGroupStop } from "./containers/composeGroup";
 import { configureContainersExplorer } from "./containers/configureContainersExplorer";
 import { downloadContainerFile } from "./containers/files/downloadContainerFile";
 import { openContainerFile } from "./containers/files/openContainerFile";
@@ -34,6 +34,7 @@ import { buildImage } from "./images/buildImage";
 import { configureImagesExplorer } from "./images/configureImagesExplorer";
 import { copyFullTag } from "./images/copyFullTag";
 import { inspectImage } from "./images/inspectImage";
+import { showDanglingImages } from "./images/showDanglingImages";
 import { pruneImages } from "./images/pruneImages";
 import { pullImage } from "./images/pullImage";
 import { pushImage } from "./images/pushImage";
@@ -135,6 +136,8 @@ export function registerCommands(): void {
     registerCommand('vscode-docker.containers.stop', stopContainer);
     registerWorkspaceCommand('vscode-docker.containers.viewLogs', viewContainerLogs);
     registerWorkspaceCommand('vscode-docker.containers.composeGroup.logs', composeGroupLogs);
+    registerWorkspaceCommand('vscode-docker.containers.composeGroup.start', composeGroupStart);
+    registerWorkspaceCommand('vscode-docker.containers.composeGroup.stop', composeGroupStop);
     registerWorkspaceCommand('vscode-docker.containers.composeGroup.restart', composeGroupRestart);
     registerWorkspaceCommand('vscode-docker.containers.composeGroup.down', composeGroupDown);
 
@@ -142,6 +145,7 @@ export function registerCommands(): void {
     registerCommand('vscode-docker.images.configureExplorer', configureImagesExplorer);
     registerCommand('vscode-docker.images.inspect', inspectImage);
     registerCommand('vscode-docker.images.prune', pruneImages);
+    registerCommand('vscode-docker.images.showDangling', showDanglingImages);
     registerWorkspaceCommand('vscode-docker.images.pull', pullImage);
     registerWorkspaceCommand('vscode-docker.images.push', pushImage);
     registerCommand('vscode-docker.images.remove', removeImage);

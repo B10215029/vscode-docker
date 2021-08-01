@@ -3,16 +3,22 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizard, AzureWizardExecuteStep, AzureWizardPromptStep } from 'vscode-azureextensionui';
+import * as vscode from 'vscode';
+import { AzureWizard, AzureWizardExecuteStep, AzureWizardPromptStep, UserCancelledError } from 'vscode-azureextensionui';
 import { localize } from '../localize';
 import { copyWizardContext } from './copyWizardContext';
 import { ChoosePlatformStep } from './wizard/ChoosePlatformStep';
 import { ChooseWorkspaceFolderStep } from './wizard/ChooseWorkspaceFolderStep';
+import { OpenStartPageStep } from './wizard/OpenStartPageStep';
 import { ScaffoldFileStep } from './wizard/ScaffoldFileStep';
 import { ScaffoldingWizardContext } from './wizard/ScaffoldingWizardContext';
 import { VerifyDockerfileStep } from './wizard/VerifyDockerfileStep';
 
 export async function scaffoldCompose(wizardContext: Partial<ScaffoldingWizardContext>, apiInput?: ScaffoldingWizardContext): Promise<void> {
+    if (!vscode.workspace.isTrusted) {
+        throw new UserCancelledError('enforceTrust');
+    }
+
     copyWizardContext(wizardContext, apiInput);
     wizardContext.scaffoldType = 'compose';
     wizardContext.scaffoldCompose = true;
@@ -24,8 +30,9 @@ export async function scaffoldCompose(wizardContext: Partial<ScaffoldingWizardCo
     ];
 
     const executeSteps: AzureWizardExecuteStep<ScaffoldingWizardContext>[] = [
-        new ScaffoldFileStep('docker-compose.yml', 300),
-        new ScaffoldFileStep('docker-compose.debug.yml', 400),
+        new ScaffoldFileStep('docker-compose.yml', 'ask', 300),
+        new ScaffoldFileStep('docker-compose.debug.yml', 'ask', 400),
+        new OpenStartPageStep(1000)
     ];
 
     const wizard = new AzureWizard<ScaffoldingWizardContext>(wizardContext as ScaffoldingWizardContext, {

@@ -4,17 +4,24 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { IActionContext } from 'vscode-azureextensionui';
+import { IActionContext, UserCancelledError } from 'vscode-azureextensionui';
 import { rewriteComposeCommandIfNeeded } from '../../docker/Contexts';
 import { localize } from "../../localize";
 import { executeAsTask } from '../../utils/executeAsTask';
 import { createFileItem, Item, quickPickDockerComposeFileItem } from '../../utils/quickPickFile';
 import { quickPickWorkspaceFolder } from '../../utils/quickPickWorkspaceFolder';
 import { selectComposeCommand } from '../selectCommandTemplate';
-import { getComposeServiceList } from './getComposeServiceList';
+import { getComposeProfileList, getComposeProfilesOrServices, getComposeServiceList } from './getComposeSubsetList';
 
 async function compose(context: IActionContext, commands: ('up' | 'down' | 'upSubset')[], message: string, dockerComposeFileUri?: vscode.Uri, selectedComposeFileUris?: vscode.Uri[]): Promise<void> {
-    const folder: vscode.WorkspaceFolder = await quickPickWorkspaceFolder(context, localize('vscode-docker.commands.compose.workspaceFolder', 'To run Docker compose you must first open a folder or workspace in VS Code.'));
+    if (!vscode.workspace.isTrusted) {
+        throw new UserCancelledError('enforceTrust');
+    }
+
+    // If a file is chosen, get its workspace folder, otherwise, require the user to choose
+    // If a file is chosen that is not in a workspace, it will automatically fall back to quickPickWorkspaceFolder
+    const folder: vscode.WorkspaceFolder = (dockerComposeFileUri ? vscode.workspace.getWorkspaceFolder(dockerComposeFileUri) : undefined) ||
+        await quickPickWorkspaceFolder(context, localize('vscode-docker.commands.compose.workspaceFolder', 'To run Docker compose you must first open a folder or workspace in VS Code.'));
 
     let commandParameterFileUris: vscode.Uri[];
     if (selectedComposeFileUris && selectedComposeFileUris.length) {
@@ -46,19 +53,14 @@ async function compose(context: IActionContext, commands: ('up' | 'down' | 'upSu
             let terminalCommand = await selectComposeCommand(
                 context,
                 folder,
-                command === 'down' ? 'down' : 'up',
+                command,
                 item?.relativeFilePath,
                 detached,
                 build
             );
 
-            if (command === 'upSubset' && !serviceListPlaceholder.test(terminalCommand)) {
-                // eslint-disable-next-line no-template-curly-in-string
-                terminalCommand += ' ${serviceList}';
-            }
-
             // Add the service list if needed
-            terminalCommand = await addServicesListIfNeeded(context, folder, terminalCommand);
+            terminalCommand = await addServicesOrProfilesIfNeeded(context, folder, terminalCommand);
 
             // Rewrite for the new CLI if needed
             terminalCommand = await rewriteComposeCommandIfNeeded(terminalCommand);
@@ -85,9 +87,19 @@ export async function composeRestart(context: IActionContext, dockerComposeFileU
 }
 
 const serviceListPlaceholder = /\${serviceList}/i;
-async function addServicesListIfNeeded(context: IActionContext, workspaceFolder: vscode.WorkspaceFolder, command: string): Promise<string> {
-    if (serviceListPlaceholder.test(command)) {
-        return command.replace(serviceListPlaceholder, await getComposeServiceList(context, workspaceFolder, command));
+const profileListPlaceholder = /\${profileList}/i;
+async function addServicesOrProfilesIfNeeded(context: IActionContext, workspaceFolder: vscode.WorkspaceFolder, command: string): Promise<string> {
+    const commandWithoutPlaceholders = command.replace(serviceListPlaceholder, '').replace(profileListPlaceholder, '');
+    if (serviceListPlaceholder.test(command) && profileListPlaceholder.test(command)) {
+        // If both are present, need to ask
+        const { services, profiles } = await getComposeProfilesOrServices(context, workspaceFolder, commandWithoutPlaceholders);
+        return command
+            .replace(serviceListPlaceholder, services)
+            .replace(profileListPlaceholder, profiles);
+    } else if (serviceListPlaceholder.test(command)) {
+        return command.replace(serviceListPlaceholder, await getComposeServiceList(context, workspaceFolder, commandWithoutPlaceholders));
+    } else if (profileListPlaceholder.test(command)) {
+        return command.replace(profileListPlaceholder, await getComposeProfileList(context, workspaceFolder, commandWithoutPlaceholders));
     } else {
         return command;
     }

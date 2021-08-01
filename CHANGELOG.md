@@ -1,3 +1,55 @@
+## 1.15.0 - 19 July 2021
+
+### Fixed
+* Use correct base image for .NET Windows containers [#3018](https://github.com/microsoft/vscode-docker/issues/3018)
+* Fix installation of Docker on ARM64 Mac machines [#3024](https://github.com/microsoft/vscode-docker/issues/3024)
+* Start page icons now display correctly [#2952](https://github.com/microsoft/vscode-docker/issues/2952)
+* Eliminate spurious errors when images are deleted from Azure Container Registry [#2968](https://github.com/microsoft/vscode-docker/issues/2968)
+* Enable deployment to App Service that uses "custom location" (Kubernetes-hosted) [#2972](https://github.com/microsoft/vscode-docker/issues/2972) [#2973](https://github.com/microsoft/vscode-docker/issues/2973)
+
+## 1.14.0 - 21 June 2021
+
+### Added
+
+* Enable Dockerfile formatter to skip instructions that span multiple lines [#992](https://github.com/microsoft/vscode-docker/issues/992) [#2004](https://github.com/microsoft/vscode-docker/issues/2004)
+* Add ability to see dangling images in the explorer [#2547](https://github.com/microsoft/vscode-docker/issues/2547)
+* Add a setting for Docker CLI executable path, providing a workaround for [#2894](https://github.com/microsoft/vscode-docker/issues/2894)
+* Enable debugging .NET applications in arm64 containers [#2884](https://github.com/microsoft/vscode-docker/issues/2884)
+
+### Fixed
+
+* Docker start Page pops up for non-docker related activations [#2953](https://github.com/microsoft/vscode-docker/issues/2953)
+
+## 1.13.0 - 25 May 2021
+
+### Added
+* Support for deploying a container image to Azure App Service on Kubernetes with Azure Arc
+* Use fixed port for .Net in compose files. [#2725](https://github.com/microsoft/vscode-docker/issues/2725)
+* Use latest version of dockerfile language server .NET apps will now scaffold using a non-root user. [#2865](https://github.com/microsoft/vscode-docker/issues/2865)
+
+### Fixed
+* "Open Folder" button not opening the folder in Mac. [#2846](https://github.com/microsoft/vscode-docker/issues/2846)
+* Webview disposed error. [#2820](https://github.com/microsoft/vscode-docker/issues/2820)
+
+## 1.12.1 - 12 April 2021
+### Fixed
+* Fixed C# extension not being recognized when adding Dockerfiles to a .NET project. [#2867](https://github.com/microsoft/vscode-docker/issues/2867)
+
+## 1.12.0 - 12 April 2021
+### Added
+* The extension now targets Docker Compose commands to files matching the `dockercompose` language ID. This raises the minimum required VS Code version to 1.55.0. [#2761](https://github.com/microsoft/vscode-docker/issues/2761)
+* .NET apps will now scaffold using a non-root user. [#1835](https://github.com/microsoft/vscode-docker/issues/1835)
+* Deployments from Azure Container Registry to Azure App Service now no longer require the admin credentials enabled on the ACR. This will now use a system-assigned Managed Service Identity. [#1685](https://github.com/microsoft/vscode-docker/issues/1685)
+* The "Docker Containers: Compose Logs" command can now be used from the palette, as long as the grouping in the containers panel is set to the default of "Compose Project Name". [#2770](https://github.com/microsoft/vscode-docker/issues/2770)
+* The contexts panel now has a "Use" button directly in the tree item, saving a click. [#2719](https://github.com/microsoft/vscode-docker/issues/2719)
+
+### Fixed
+* ACI contexts should now work in sovereign clouds. [#2775](https://github.com/microsoft/vscode-docker/issues/2775)
+* Better information on both Python and .NET Dockerfiles about running as a non-root user. [#2724](https://github.com/microsoft/vscode-docker/issues/2724)
+* Generic registry auth will now try both `POST` and `GET` to obtain a token. [#2735](https://github.com/microsoft/vscode-docker/issues/2735)
+* Commands launched on compose groups from the containers panel now use the compose project name. [#2755](https://github.com/microsoft/vscode-docker/issues/2755)
+* Containers will now more reliably be removed after debugging when using the Restart option. [#2676](https://github.com/microsoft/vscode-docker/issues/2676)
+
 ## 1.11.0 - 15 March 2021
 ### Added
 * Scaffolding and debugging for Python FastAPI is now added. Thanks @Kludex! [#2615](https://github.com/microsoft/vscode-docker/issues/2615)

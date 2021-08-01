@@ -27,13 +27,12 @@ export interface Survey {
 
 export class SurveyManager {
     public activate(): void {
-        if (!ext.telemetryOptIn || ext.runningTests) {
+        if (!vscode.env.isTelemetryEnabled) {
             return;
         }
 
         for (const survey of currentSurveys) {
             // Generate a slush of +/- 3 seconds
-            // eslint-disable-next-line @typescript-eslint/tslint/config
             const slush = Math.round(Math.random() * slushTime * 2) - slushTime;
 
             const timer = setTimeout(
@@ -79,7 +78,9 @@ export class SurveyManager {
                     }
                 });
             }
-        } catch { } // Best effort
+        } catch {
+            // Best effort
+        }
     }
 
     private async surveyOpen(url: string): Promise<void> {

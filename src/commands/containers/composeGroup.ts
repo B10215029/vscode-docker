@@ -6,6 +6,7 @@
 import * as path from 'path';
 import { IActionContext } from 'vscode-azureextensionui';
 import { rewriteComposeCommandIfNeeded } from '../../docker/Contexts';
+import { ext } from '../../extensionVariables';
 import { localize } from '../../localize';
 import { ContainerGroupTreeItem } from '../../tree/containers/ContainerGroupTreeItem';
 import { ContainerTreeItem } from '../../tree/containers/ContainerTreeItem';
@@ -16,6 +17,14 @@ export async function composeGroupLogs(context: IActionContext, node: ContainerG
     return composeGroup(context, 'logs', node, '-f --tail 1000');
 }
 
+export async function composeGroupStart(context: IActionContext, node: ContainerGroupTreeItem): Promise<void> {
+    return composeGroup(context, 'start', node);
+}
+
+export async function composeGroupStop(context: IActionContext, node: ContainerGroupTreeItem): Promise<void> {
+    return composeGroup(context, 'stop', node);
+}
+
 export async function composeGroupRestart(context: IActionContext, node: ContainerGroupTreeItem): Promise<void> {
     return composeGroup(context, 'restart', node);
 }
@@ -24,16 +33,27 @@ export async function composeGroupDown(context: IActionContext, node: ContainerG
     return composeGroup(context, 'down', node);
 }
 
-async function composeGroup(context: IActionContext, composeCommand: 'logs' | 'restart' | 'down', node: ContainerGroupTreeItem, additionalArguments?: string): Promise<void> {
+async function composeGroup(context: IActionContext, composeCommand: 'logs' | 'start' | 'stop' | 'restart' | 'down', node: ContainerGroupTreeItem, additionalArguments?: string): Promise<void> {
+    if (!node) {
+        await ext.containersTree.refresh(context);
+        node = await ext.containersTree.showTreeItemPicker<ContainerGroupTreeItem>(/composeGroup$/i, {
+            ...context,
+            noItemFoundErrorMessage: localize('vscode-docker.commands.containers.composeGroup.noComposeProjects', 'No Docker Compose projects are running.'),
+        });
+    }
+
     const workingDirectory = getComposeWorkingDirectory(node);
     const filesArgument = getComposeFiles(node)?.map(f => isWindows() ? `-f "${f}"` : `-f '${f}'`)?.join(' ');
+    const projectName = getProjectName(node);
 
-    if (!workingDirectory || !filesArgument) {
+    if (!workingDirectory || !filesArgument || !projectName) {
         context.errorHandling.suppressReportIssue = true;
         throw new Error(localize('vscode-docker.commands.containers.composeGroup.noCompose', 'Unable to determine compose project info for container group \'{0}\'.', node.label));
     }
 
-    const terminalCommand = `docker-compose ${filesArgument} ${composeCommand} ${additionalArguments || ''}`;
+    const projectNameArgument = isWindows() ? `-p "${projectName}"` : `-p '${projectName}'`;
+
+    const terminalCommand = `docker-compose ${filesArgument} ${projectNameArgument} ${composeCommand} ${additionalArguments || ''}`;
 
     await executeAsTask(context, await rewriteComposeCommandIfNeeded(terminalCommand), 'Docker Compose', { addDockerEnv: true, cwd: workingDirectory, });
 }
@@ -51,4 +71,10 @@ function getComposeFiles(node: ContainerGroupTreeItem): string[] | undefined {
     // Paths may be subpaths, but working dir generally always directly contains the config files, so let's cut off the subfolder and get just the file name
     // (In short, the working dir may not be the same as the cwd when the docker-compose up command was called, BUT the files are relative to that cwd)
     return container?.labels?.['com.docker.compose.project.config_files']?.split(',')?.map(f => path.parse(f).base);
+}
+
+function getProjectName(node: ContainerGroupTreeItem): string | undefined {
+    // Find a container with the `com.docker.compose.project` label, which gives the project name
+    const container = (node.ChildTreeItems as ContainerTreeItem[]).find(c => c.labels?.['com.docker.compose.project']);
+    return container?.labels?.['com.docker.compose.project'];
 }

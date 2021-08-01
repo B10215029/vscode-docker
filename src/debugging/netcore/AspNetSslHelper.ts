@@ -8,8 +8,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as semver from 'semver';
 import { MessageItem } from 'vscode';
-import { parseError } from 'vscode-azureextensionui';
-import { ext } from '../../extensionVariables';
+import { IActionContext, parseError } from 'vscode-azureextensionui';
 import { localize } from '../../localize';
 import { cryptoUtils } from '../../utils/cryptoUtils';
 import { getDotNetVersion } from '../../utils/netCoreUtils';
@@ -20,7 +19,7 @@ import { execAsync } from '../../utils/spawnAsync';
 const knownConfiguredProjects = new Set<string>();
 let alreadyTrustedOrSkipped: boolean = false;
 
-export async function trustCertificateIfNecessary(): Promise<void> {
+export async function trustCertificateIfNecessary(context: IActionContext): Promise<void> {
     if (alreadyTrustedOrSkipped) {
         return;
     }
@@ -28,10 +27,10 @@ export async function trustCertificateIfNecessary(): Promise<void> {
     if (isWindows()) {
         if (!(await isCertificateTrusted())) {
             const trust: MessageItem = { title: localize('vscode-docker.debugging.netCore.trust', 'Trust') };
-            const message = localize('vscode-docker.debugging.netCore.notTrusted', 'The ASP.NET Core HTTPS development certificate is not trusted. To trust the certificate, run \`dotnet dev-certs https --trust\`, or click "Trust" below.');
+            const message = localize('vscode-docker.debugging.netCore.notTrusted', 'The ASP.NET Core HTTPS development certificate is not trusted. To trust the certificate, run `dotnet dev-certs https --trust`, or click "Trust" below.');
 
             // Don't wait
-            void ext.ui
+            void context.ui
                 .showWarningMessage(message, { modal: false, learnMoreLink: 'https://aka.ms/vscode-docker-dev-certs' }, trust)
                 .then(async selection => {
                     if (selection === trust) {
@@ -42,10 +41,10 @@ export async function trustCertificateIfNecessary(): Promise<void> {
         }
     } else if (isMac()) {
         if (!(await isCertificateTrusted())) {
-            const message = localize('vscode-docker.debugging.netCore.notTrustedRunManual', 'The ASP.NET Core HTTPS development certificate is not trusted. To trust the certificate, run \`dotnet dev-certs https --trust\`.');
+            const message = localize('vscode-docker.debugging.netCore.notTrustedRunManual', 'The ASP.NET Core HTTPS development certificate is not trusted. To trust the certificate, run `dotnet dev-certs https --trust`.');
 
             // Don't wait
-            void ext.ui.showWarningMessage(
+            void context.ui.showWarningMessage(
                 message,
                 { modal: false, learnMoreLink: 'https://aka.ms/vscode-docker-dev-certs' });
         }
@@ -84,14 +83,22 @@ export function getHostSecretsFolders(): { hostCertificateFolder: string, hostUs
     };
 }
 
-export function getContainerSecretsFolders(platform: PlatformOS): { containerCertificateFolder: string, containerUserSecretsFolder: string } {
+export function getContainerSecretsFolders(platform: PlatformOS, userName: string | undefined): { containerCertificateFolder: string, containerUserSecretsFolder: string } {
+    // If username is undefined, assume 'ContainerUser' for Windows and 'root' for Linux, these are the defaults for .NET
+    userName = userName || (platform === 'Windows' ? 'ContainerUser' : 'root');
+
+    // On Windows, the user home directory is at C:\Users\<username>. On Linux, it's /root for root, otherwise /home/<username>
+    const userHome = platform === 'Windows' ?
+        path.win32.join('C:\\Users', userName) :
+        userName === 'root' ? '/root' : path.posix.join('/home', userName);
+
     return {
         containerCertificateFolder: platform === 'Windows' ?
-            'C:\\Users\\ContainerUser\\AppData\\Roaming\\ASP.NET\\Https' :
-            '/root/.aspnet/https',
+            path.win32.join(userHome, 'AppData\\Roaming\\ASP.NET\\Https') :
+            path.posix.join(userHome, '.aspnet/https'),
         containerUserSecretsFolder: platform === 'Windows' ?
-            'C:\\Users\\ContainerUser\\AppData\\Roaming\\Microsoft\\UserSecrets' :
-            '/root/.microsoft/usersecrets',
+            path.win32.join(userHome, 'AppData\\Roaming\\Microsoft\\UserSecrets') :
+            path.posix.join(userHome, '.microsoft/usersecrets'),
     };
 }
 

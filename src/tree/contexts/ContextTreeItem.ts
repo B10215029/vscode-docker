@@ -5,13 +5,14 @@
 
 import { MarkdownString, ThemeIcon } from "vscode";
 import { AzExtParentTreeItem, IActionContext } from "vscode-azureextensionui";
+import { defaultContextNames } from "../../docker/ContextManager";
 import { DockerContext, DockerContextInspection } from "../../docker/Contexts";
 import { ext } from "../../extensionVariables";
-import { AzExtTreeItemIntermediate } from "../AzExtTreeItemIntermediate";
 import { getTreeId } from "../LocalRootTreeItemBase";
 import { resolveTooltipMarkdown } from "../resolveTooltipMarkdown";
+import { ToolTipTreeItem } from "../ToolTipTreeItem";
 
-export class ContextTreeItem extends AzExtTreeItemIntermediate {
+export class ContextTreeItem extends ToolTipTreeItem {
     public static allContextRegExp: RegExp = /Context;/;
     public static removableContextRegExp: RegExp = /^customContext;/i;
 
@@ -25,7 +26,7 @@ export class ContextTreeItem extends AzExtTreeItemIntermediate {
     public get contextValue(): string {
         let result: string;
 
-        if (this.name === 'default') {
+        if (defaultContextNames.indexOf(this.name) >= 0) {
             result = 'defaultContext;';
         } else if (this.current) {
             result = 'currentCustomContext;';

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ContainerRegistryManagementClient, ContainerRegistryManagementModels as AcrModels } from '@azure/arm-containerregistry';
+import { ContainerRegistryManagementClient, ContainerRegistryManagementModels as AcrModels } from '@azure/arm-containerregistry'; // These are only dev-time imports so don't need to be lazy
 import { window } from 'vscode';
 import { AzExtParentTreeItem, AzExtTreeItem, AzureWizard, createAzureClient, IActionContext, ICreateChildImplContext, ISubscriptionContext, LocationListStep, ResourceGroupListStep, SubscriptionTreeItemBase } from "vscode-azureextensionui";
 import { localize } from '../../../localize';
@@ -27,14 +27,14 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase implements IR
         super(parent, root);
     }
 
-    public async loadMoreChildrenImpl(clearCache: boolean, _context: IActionContext): Promise<AzExtTreeItem[]> {
+    public async loadMoreChildrenImpl(clearCache: boolean, context: IActionContext): Promise<AzExtTreeItem[]> {
         if (clearCache) {
             this._nextLink = undefined;
         }
 
         const armContainerRegistry = await import('@azure/arm-containerregistry');
         const client: ContainerRegistryManagementClient = createAzureClient(this.root, armContainerRegistry.ContainerRegistryManagementClient);
-        let registryListResult: AcrModels.RegistryListResult = this._nextLink === undefined ?
+        const registryListResult: AcrModels.RegistryListResult = this._nextLink === undefined ?
             await client.registries.list() :
             await client.registries.listNext(this._nextLink);
 

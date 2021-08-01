@@ -87,7 +87,9 @@ export class ContainersTreeItem extends LocalRootTreeItemBase<DockerContainerInf
             case 'State':
                 return item.State;
             case 'Status':
-                return item.Status;
+                // The rapidly-refreshing status during a container's first minute causes a lot of problems with excessive refreshing
+                // This normalizes things like "10 seconds" to "Less than a minute", meaning the refreshes don't happen constantly
+                return item.Status?.replace(/\d+ seconds?/i, localize('vscode-docker.tree.containers.lessThanMinute', 'Less than a minute'));
             case 'Compose Project Name':
                 return getComposeProjectName(item);
             default:
@@ -119,12 +121,21 @@ export class ContainersTreeItem extends LocalRootTreeItemBase<DockerContainerInf
             dockerTutorialTreeItem.iconPath = getThemedIconPath('docker');
             return [dockerTutorialTreeItem];
         }
-        return super.getTreeItemForEmptyList()
+        return super.getTreeItemForEmptyList();
     }
 
     protected areArraysEqual(array1: DockerContainerInfo[] | undefined, array2: DockerContainerInfo[] | undefined): boolean {
         if (!super.areArraysEqual(array1, array2)) {
             // If they aren't the same according to the base class implementation, they are definitely not the same according to this either
+            return false;
+        }
+
+        // If they are both undefined, return true
+        // If only one is undefined, return false
+        // This matches the behavior of the base class implementation, and guards against null refs below
+        if (array1 === undefined && array2 === undefined) {
+            return true;
+        } else if (array1 === undefined || array2 === undefined) {
             return false;
         }
 
